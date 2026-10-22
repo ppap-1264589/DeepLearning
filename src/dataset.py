@@ -1,11 +1,15 @@
 import numpy as np
 import pandas as pd
 from PIL import Image
+import torch
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 
 from src.config import (RAW, SPLITS, BATCH_SIZE, NUM_WORKERS,
-                        USE_ROI_CROP, NUM_CLASSES)
+                        USE_ROI_CROP, NUM_CLASSES, MEAN, STD)
 from src.transforms import get_train_transform, get_eval_transform
+
+mean = torch.tensor(MEAN).view(3, 1, 1)
+std = torch.tensor(STD).view(3, 1, 1)
 
 
 class GTSRBDataset(Dataset):
@@ -63,8 +67,9 @@ if __name__ == "__main__":
     print("số batch   : train", len(train_loader), "| val", len(val_loader), "| test", len(test_loader))
 
     fig, axes = plt.subplots(2, 8, figsize=(14, 4))
+
     for ax, img, lab in zip(axes.ravel(), x[:16], y[:16]):
-        ax.imshow((img * 0.5 + 0.5).permute(1, 2, 0).clamp(0, 1))   # bỏ chuẩn hóa để xem
+        ax.imshow((img * std + mean).permute(1, 2, 0).clamp(0, 1))   # bỏ chuẩn hóa để xem
         ax.set_title(str(lab.item()), fontsize=9)
         ax.axis("off")
     out = ROOT / "outputs" / "figures"
