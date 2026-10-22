@@ -26,14 +26,23 @@ def main():
     model = SimpleCNN().to(device)
     opt = torch.optim.Adam(model.parameters(), 1e-3)
     crit = nn.CrossEntropyLoss()
-    t0 = time.time()
-    for _ in range(50):
+
+    def step():
         loss = crit(model(x), y)
         opt.zero_grad(); loss.backward(); opt.step()
-    t_model = time.time() - t0
 
+    for _ in range(5):                      # khởi động, không tính giờ
+        step()
     if device.type == "cuda":
         torch.cuda.synchronize()
+
+    t0 = time.time()
+    for _ in range(50):
+        step()
+    if device.type == "cuda":
+        torch.cuda.synchronize()            # đồng bộ TRƯỚC khi dừng đồng hồ
+        
+    t_model = time.time() - t0
 
     print(f"chạy model  : {t_model:.1f}s / 50 batch -> ước tính {t_model/50*n_batches/60:.1f} phút/epoch")
 
