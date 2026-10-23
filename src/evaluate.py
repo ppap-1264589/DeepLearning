@@ -7,7 +7,7 @@ Ví dụ:
 Kết quả:
     outputs/reports/<name>_<split>_per_class.csv   precision/recall/F1 theo từng lớp
     outputs/figures/<name>_<split>_confusion.png   confusion matrix (chuẩn hóa theo hàng)
-    outputs/figures/<name>_<split>_errors.png      ảnh bị đoán sai (sai mà tự tin nhất)
+    outputs/figures/<name>_<split>_errors.png      ảnh bị đoán sai cạnh ảnh meta của lớp thật và lớp bị đoán
 """
 import argparse
 
@@ -89,21 +89,53 @@ def load_raw_image(ds, i):
     return img
 
 
-def plot_errors(ds, labels, preds, confs, out_path, n=24, cols=6):
+def load_meta():
+    """Ảnh biển báo chuẩn (Meta) của từng lớp: {class_id: PIL.Image}.
+    Cần Meta.csv (cột Path, ClassId) và thư mục Meta/ trong data/raw."""
+    csv = RAW / "Meta.csv"
+    if not csv.exists():
+        print("Không tìm thấy Meta.csv, bỏ qua ảnh meta.")
+        return {}
+    df = pd.read_csv(csv)
+    meta = {}
+    for cid, path in zip(df["ClassId"], df["Path"]):
+        p = RAW / path
+        if p.exists():
+            img = Image.open(p).convert("RGBA")
+            bg = Image.new("RGBA", img.size, (255, 255, 255, 255))   # nền trắng thay vì đen
+            meta[int(cid)] = Image.alpha_composite(bg, img).convert("RGB")
+    return meta
+
+
+def plot_errors(ds, labels, preds, confs, meta, out_path, n=12, groups_per_row=2):
+    """Mỗi ảnh sai gồm 3 ô: ảnh bị đoán sai | meta lớp thật | meta lớp bị đoán.
+    Chọn các ảnh sai mà mô hình tự tin nhất."""
     wrong = np.where(labels != preds)[0]
     if len(wrong) == 0:
         print("Không có ảnh nào bị đoán sai.")
         return
-    wrong = wrong[np.argsort(confs[wrong])[::-1]][:n]     # sai mà tự tin nhất
-    rows = int(np.ceil(len(wrong) / cols))
-    fig, axes = plt.subplots(rows, cols, figsize=(cols * 2, rows * 2.3))
-    axes = np.atleast_1d(axes).ravel()
-    for ax in axes:
+    wrong = wrong[np.argsort(confs[wrong])[::-1]][:n]
+    rows = int(np.ceil(len(wrong) / groups_per_row))
+    cols = groups_per_row * 3
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 1.9, rows * 2.4))
+    axes = np.atleast_2d(axes)
+    for ax in axes.ravel():
         ax.axis("off")
-    for ax, i in zip(axes, wrong):
-        ax.imshow(load_raw_image(ds, i))
-        ax.set_title(f"{labels[i]}→{preds[i]} ({confs[i]:.2f})", fontsize=8)
-    fig.suptitle("Ảnh bị đoán sai: thật→dự đoán (độ tự tin)")
+
+    for k, i in enumerate(wrong):
+        r, c = divmod(k, groups_per_row)
+        a0, a1, a2 = axes[r, c * 3], axes[r, c * 3 + 1], axes[r, c * 3 + 2]
+        t, p = int(labels[i]), int(preds[i])
+        a0.imshow(load_raw_image(ds, i))
+        a0.set_title(f"ảnh sai ({confs[i]:.2f})", fontsize=8)
+        if t in meta:
+            a1.imshow(meta[t])
+        a1.set_title(f"thật: {t}", fontsize=8, color="green")
+        if p in meta:
+            a2.imshow(meta[p])
+        a2.set_title(f"đoán: {p}", fontsize=8, color="red")
+
+    fig.suptitle("Ảnh bị đoán sai | meta lớp thật | meta lớp bị đoán")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -151,7 +183,7 @@ def main():
     tag = f"{args.name}_{args.split}"
     table.to_csv(rep_dir / f"{tag}_per_class.csv", index=False)
     plot_confusion(cm, f"Confusion matrix: {tag}", fig_dir / f"{tag}_confusion.png")
-    plot_errors(ds, labels, preds, confs, fig_dir / f"{tag}_errors.png")
+    plot_errors(ds, labels, preds, confs, load_meta(), fig_dir / f"{tag}_errors.png")
     print("\nĐã lưu:", rep_dir / f"{tag}_per_class.csv")
     print("Đã lưu:", fig_dir / f"{tag}_confusion.png")
     print("Đã lưu:", fig_dir / f"{tag}_errors.png")
