@@ -12,5 +12,5 @@ STD  = (0.2731, 0.2567, 0.2671)
 
 IMG_SIZE = 48          # kích thước resize (median ảnh là 43)
 USE_ROI_CROP = True    # crop theo Roi.* trước khi resize
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 NUM_WORKERS = 2        # Windows: để 0 cho an toàn, tăng sau khi mọi thứ chạy ổn

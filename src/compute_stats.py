@@ -13,7 +13,7 @@ def main():
         transforms.ToTensor(),                      # đưa pixel về [0, 1]
     ])
     ds = GTSRBDataset(SPLITS / "train.csv", transform=tf, use_roi=USE_ROI_CROP)
-    loader = DataLoader(ds, batch_size=256, num_workers=NUM_WORKERS)
+    loader = DataLoader(ds, batch_size=1024, num_workers=NUM_WORKERS)
 
     n = 0
     s = torch.zeros(3, dtype=torch.float64)         # tổng pixel theo kênh
