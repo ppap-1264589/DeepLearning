@@ -59,3 +59,55 @@ Vì vậy, nếu một vài lớp ít ảnh bị đoán kém, Macro-F1 giảm r�
 - Tập **val** dùng để theo dõi quá trình học, phát hiện overfitting, chọn checkpoint và so sánh các cấu hình (Adam với SGD, có hoặc không scheduler, ...).
 - Tập **test** chỉ dùng để báo cáo kết quả cuối, không dùng để chọn mô hình.
 - F1 theo từng lớp và confusion matrix cho biết lỗi nằm ở Precision (hay gán nhầm vào lớp đó) hay Recall (hay bỏ sót lớp đó). Với biển báo giao thông, bỏ sót một biển như STOP (Recall thấp) thường nguy hiểm hơn việc báo nhầm.
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Mô hình "tự tin" bao nhiêu thì biết bằng cách nào
+
+Với mỗi ảnh, mô hình trả về 43 con số thô (logits). Hàm `predict` đưa chúng qua `softmax` để thành 43 xác suất, cộng lại bằng 1:
+
+```python
+probs = torch.softmax(model(x), dim=1)
+conf, pred = probs.max(dim=1)
+```
+
+- `pred` là lớp có xác suất cao nhất, tức đáp án mô hình chọn.
+- `conf` là **xác suất của chính lớp đó**, và đây là con số trong ngoặc bên cạnh ảnh sai.
+
+Ví dụ ảnh có `(1.00)` nghĩa là mô hình gán xấp xỉ 100% xác suất cho đáp án sai của nó. Ảnh có `(0.45)` nghĩa là mô hình còn lưỡng lự, lớp đoán chỉ hơn các lớp khác chút ít. Số hiển thị đã làm tròn 2 chữ số, nên `1.00` có thể là 0.996 hay 0.9999.
+
+Con số này **không phải** xác suất của lớp thật, cũng không phải accuracy. Nó chỉ cho biết mô hình chắc chắn đến đâu về đáp án (sai) của mình.
+
+## Vì sao biết ảnh nào tự tin nhất
+
+Chỉ cần sắp xếp các ảnh sai theo `conf` giảm dần rồi lấy `n` ảnh đầu:
+
+```python
+wrong = np.where(labels != preds)[0]      # chỉ số các ảnh bị đoán sai
+wrong = wrong[np.argsort(confs[wrong])[::-1]][:n]
+```
+
+- `np.where(labels != preds)[0]`: lấy vị trí của các ảnh mà nhãn thật khác nhãn dự đoán.
+- `confs[wrong]`: lấy độ tự tin của riêng những ảnh sai đó.
+- `np.argsort(...)`: trả về thứ tự vị trí từ `conf` thấp đến cao.
+- `[::-1]`: đảo ngược thành cao đến thấp.
+- `[:n]`: giữ lại 12 ảnh đầu.
+
+## Vì sao chọn ảnh "sai mà tự tin nhất"
+
+Đó là các ảnh mang nhiều thông tin nhất. Ảnh sai với conf thấp thường là ảnh mờ hoặc khó, mô hình đã do dự và lỗi đó dễ hiểu. Ảnh sai với conf rất cao cho thấy một trong ba khả năng:
+- Hai lớp thực sự trông gần như giống nhau (ví dụ hai biển giới hạn tốc độ).
+- Mô hình học nhầm một đặc điểm không đúng.
+- **Nhãn trong dữ liệu có thể sai.** Nếu nhìn ảnh mà thấy mô hình có vẻ đúng hơn nhãn thật, đó là một phát hiện đáng ghi vào báo cáo.
+
+Một lưu ý nữa: mạng nơ-ron thường **quá tự tin**, nên conf = 1.00 không có nghĩa là xác suất sai thật sự bằng 0. Hãy dùng nó để xếp thứ tự các ảnh cần xem lại, đừng xem nó như xác suất chính xác. Nếu muốn xem cả các ảnh sai với mức tự tin trung bình, bạn có thể đổi `[::-1]` thành lấy ngẫu nhiên, hoặc tăng `n` để thấy nhiều ảnh hơn.
