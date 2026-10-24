@@ -111,3 +111,50 @@ wrong = wrong[np.argsort(confs[wrong])[::-1]][:n]
 - **Nhãn trong dữ liệu có thể sai.** Nếu nhìn ảnh mà thấy mô hình có vẻ đúng hơn nhãn thật, đó là một phát hiện đáng ghi vào báo cáo.
 
 Một lưu ý nữa: mạng nơ-ron thường **quá tự tin**, nên conf = 1.00 không có nghĩa là xác suất sai thật sự bằng 0. Hãy dùng nó để xếp thứ tự các ảnh cần xem lại, đừng xem nó như xác suất chính xác. Nếu muốn xem cả các ảnh sai với mức tự tin trung bình, bạn có thể đổi `[::-1]` thành lấy ngẫu nhiên, hoặc tăng `n` để thấy nhiều ảnh hơn.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+**Kết quả baseline (SimpleCNN, Adam, lr 1e-3 cố định, 10 epoch, tập val)**
+
+Accuracy 97,0%, macro-F1 94,6%, 236/7860 ảnh sai. Checkpoint tốt nhất ở epoch 6.
+
+**1. Quá trình huấn luyện**
+- Mô hình hội tụ nhanh: sau 3 epoch val accuracy đã trên 95%.
+- Từ epoch 6–7, train loss tiếp tục giảm (0,05 → 0,025) trong khi val loss tăng trở lại (0,12 → 0,20). Val accuracy gần như đi ngang (96,3–97,0%), val macro-F1 giảm từ 0,953 xuống 0,942. Đây là dấu hiệu overfitting nhẹ: mô hình ngày càng tự tin hơn, kể cả trên các ảnh nó đoán sai.
+- Learning rate cố định 1e-3 nên val loss dao động ở cuối. Đây là lý do để thử scheduler (plateau, cosine).
+
+**2. Accuracy cao hơn macro-F1 khoảng 2,4 điểm**
+Khoảng cách này là do một vài lớp bị bỏ rơi, không phải lỗi rải đều.
+
+**3. Lỗi tập trung ở rất ít lớp**
+- **Lớp 23 (đường trơn):** precision 1,00 nhưng recall chỉ 0,28, F1 0,44. Khoảng 86/120 ảnh bị đoán sai, chủ yếu thành lớp 20 (đường cong nguy hiểm bên phải). Lớp 20 vì thế có precision chỉ 0,50 dù recall 0,93.
+- **Lớp 30 (băng tuyết, recall 0,64)** bị nhầm thành lớp 11; **lớp 0 (giới hạn 20)** nhầm thành lớp 1 (giới hạn 30); **lớp 34** recall 0,81.
+- Bốn lớp 23, 30, 0, 34 chiếm khoảng 142/236 (60%) số ảnh sai.
+
+**4. Đặc điểm của các ảnh sai**
+Hầu hết là ảnh độ phân giải thấp, tối hoặc mờ, nên phần biểu tượng bên trong biển gần như mất ở 48×48. Các cặp bị nhầm đều cùng hình dạng và màu (tam giác viền đỏ, tròn xanh, tròn viền đỏ chỉ khác chữ số), chỉ khác phần ký hiệu bên trong. Mô hình đoán sai với độ tự tin 1,00 (gần như chắc chắn), nên độ tự tin không dùng được để phát hiện các lỗi này.
+
+**5. Hướng cải thiện**
+Scheduler giảm lr, dừng sớm/dropout để giảm overfitting, thêm augmentation hoặc tăng độ phân giải cho ảnh tối/mờ, và so sánh với mô hình transfer learning.

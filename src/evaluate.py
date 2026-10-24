@@ -23,7 +23,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from src.config import ROOT, RAW, NUM_CLASSES
-from src.dataset import get_dataloaders       # nếu bạn đã tách file, đổi thành src.dataloaders
+from src.dataset import get_dataloaders
 from src.models.cnn import SimpleCNN
 
 
