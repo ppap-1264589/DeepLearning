@@ -4,6 +4,7 @@ import time
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.metrics import f1_score
 
 from src.config import ROOT, SEED
@@ -14,7 +15,10 @@ from src.plot_history import plot_run
 
 def run_epoch(model, loader, criterion, device, optimizer=None):
     """Chạy 1 epoch. Có optimizer => huấn luyện; không có => đánh giá.
-    Trả về (loss, accuracy, macro-F1)."""
+    Trả về (loss, accuracy, macro-F1).
+
+    `criterion` (có thể có label smoothing) chỉ dùng để tính gradient. Loss GHI LOG luôn là
+    cross-entropy thường, để loss so được giữa các run và giữa train với val."""
     training = optimizer is not None
     model.train() if training else model.eval()
 
@@ -31,7 +35,7 @@ def run_epoch(model, loader, criterion, device, optimizer=None):
                 loss.backward()
                 optimizer.step()
 
-            total_loss += loss.item() * x.size(0)
+            total_loss += F.cross_entropy(logits.detach(), y).item() * x.size(0)
             n += x.size(0)
             preds.append(logits.argmax(1).cpu())
             labels.append(y.cpu())
@@ -43,10 +47,12 @@ def run_epoch(model, loader, criterion, device, optimizer=None):
     return total_loss / n, acc, macro_f1
 
 
-def build_optimizer(name, params, lr):
+def build_optimizer(name, params, lr, weight_decay=0.0):
     if name == "adam":
+        if weight_decay > 0:      # Adam + weight decay => dùng AdamW (decay tách khỏi gradient)
+            return torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
         return torch.optim.Adam(params, lr=lr)
-    return torch.optim.SGD(params, lr=lr, momentum=0.9)
+    return torch.optim.SGD(params, lr=lr, momentum=0.9, weight_decay=weight_decay)
 
 
 def build_scheduler(name, optimizer, epochs):
@@ -64,19 +70,30 @@ def main():
     parser.add_argument("--optimizer", choices=["adam", "sgd"], default="adam")
     parser.add_argument("--scheduler", choices=["none", "plateau", "cosine"], default="none")
     parser.add_argument("--balance", choices=["none", "sampler"], default="none")
+    parser.add_argument("--dropout", type=float, default=0.0, help="tỉ lệ dropout giữa 2 lớp Linear (0 = tắt)")
+    parser.add_argument("--weight-decay", type=float, default=0.0, help="0 = tắt; Adam sẽ chuyển sang AdamW")
+    parser.add_argument("--label-smoothing", type=float, default=0.0, help="0 = tắt; thường dùng 0.1")
+    parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--name", default=None, help="tên lần chạy (mặc định tự sinh từ cấu hình)")
     args = parser.parse_args()
 
-    name = args.name or f"cnn_{args.optimizer}_{args.scheduler}_{args.balance}"
+    tags = []
+    if args.dropout:
+        tags.append(f"do{args.dropout:g}")
+    if args.weight_decay:
+        tags.append(f"wd{args.weight_decay:g}")
+    if args.label_smoothing:
+        tags.append(f"ls{args.label_smoothing:g}")
+    name = args.name or "_".join([f"cnn_{args.optimizer}_{args.scheduler}_{args.balance}"] + tags)
 
-    torch.manual_seed(SEED)
+    torch.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("device:", device, "| run:", name)
 
     train_loader, val_loader, _ = get_dataloaders(balance=args.balance)
-    model = SimpleCNN().to(device)
-    criterion = nn.CrossEntropyLoss()      # dùng sampler thì KHÔNG thêm class weight ở đây
-    optimizer = build_optimizer(args.optimizer, model.parameters(), args.lr)
+    model = SimpleCNN(dropout=args.dropout).to(device)
+    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)   # dùng sampler thì KHÔNG thêm class weight ở đây
+    optimizer = build_optimizer(args.optimizer, model.parameters(), args.lr, args.weight_decay)
     scheduler = build_scheduler(args.scheduler, optimizer, args.epochs)
 
     ckpt_dir = ROOT / "outputs" / "checkpoints"
