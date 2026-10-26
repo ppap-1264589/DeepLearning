@@ -47,10 +47,22 @@ def get_dataloaders(batch_size=BATCH_SIZE, use_roi=USE_ROI_CROP,
         sample_w = 1.0 / counts[train_ds.labels]
         sampler = WeightedRandomSampler(sample_w, num_samples=len(train_ds), replacement=True)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler,
-                              shuffle=(sampler is None), num_workers=num_workers)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, num_workers=num_workers)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, num_workers=num_workers)
+    train_loader = DataLoader(train_ds, 
+                              batch_size=batch_size, 
+                              sampler=sampler, shuffle=(sampler is None), 
+                              num_workers=num_workers,
+                              prefetch_factor=2,
+                              pin_memory=True)
+    val_loader = DataLoader(val_ds, 
+                            batch_size=batch_size, 
+                            num_workers=num_workers,
+                            prefetch_factor=2,
+                            pin_memory=True)
+    test_loader = DataLoader(test_ds, 
+                             batch_size=batch_size, 
+                             num_workers=num_workers,
+                             prefetch_factor=2,
+                             pin_memory=True)
     return train_loader, val_loader, test_loader
 
 
