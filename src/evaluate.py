@@ -151,7 +151,7 @@ def main():
     model = SimpleCNN().to(device)
     model.load_state_dict(torch.load(ckpt, map_location=device))
 
-    _, val_loader, test_loader = get_dataloaders(balance="none")
+    _, val_loader, test_loader = get_dataloaders(balance="none", splits=(args.split,))
     loader = val_loader if args.split == "val" else test_loader
     ds = loader.dataset
 

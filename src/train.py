@@ -90,7 +90,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("device:", device, "| run:", name)
 
-    train_loader, val_loader, _ = get_dataloaders(balance=args.balance)
+    train_loader, val_loader, _ = get_dataloaders(balance=args.balance, splits=("train", "val"))
     model = SimpleCNN(dropout=args.dropout).to(device)
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)   # dùng sampler thì KHÔNG thêm class weight ở đây
     optimizer = build_optimizer(args.optimizer, model.parameters(), args.lr, args.weight_decay)

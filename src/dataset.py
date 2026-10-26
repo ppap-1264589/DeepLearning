@@ -53,37 +53,36 @@ class GTSRBDataset(Dataset):
             
         return img, int(self.labels[i])
 
+
 def get_dataloaders(batch_size=BATCH_SIZE, use_roi=USE_ROI_CROP,
-                    balance="sampler", num_workers=NUM_WORKERS):
+                    balance="sampler", num_workers=NUM_WORKERS,
+                    splits=("train", "val", "test")):
+    """Chỉ nạp các split có trong `splits`; split không nạp trả về None."""
     """balance: 'sampler' (lấy mẫu cân bằng lớp) hoặc 'none'.
     Nếu dùng 'sampler' thì KHÔNG dùng thêm class weight trong loss (tránh bù hai lần)."""
-    train_ds = GTSRBDataset(SPLITS / "train.csv", get_train_transform(), use_roi)
-    val_ds = GTSRBDataset(SPLITS / "val.csv", get_eval_transform(), use_roi)
-    test_ds = GTSRBDataset(SPLITS / "test.csv", get_eval_transform(), use_roi)
+    def make(name, tf):
+        if name not in splits:
+            return None
+        return GTSRBDataset(SPLITS / f"{name}.csv", tf, use_roi)
+
+    train_ds = make("train", get_train_transform())
+    val_ds = make("val", get_eval_transform())
+    test_ds = make("test", get_eval_transform())
 
     sampler = None
-    if balance == "sampler":
+    if balance == "sampler" and train_ds is not None:
         counts = np.bincount(train_ds.labels, minlength=NUM_CLASSES)
         sample_w = 1.0 / counts[train_ds.labels]
         sampler = WeightedRandomSampler(sample_w, num_samples=len(train_ds), replacement=True)
 
-    train_loader = DataLoader(train_ds, 
-                              batch_size=batch_size, 
-                              sampler=sampler, shuffle=(sampler is None), 
-                              num_workers=num_workers,
-                              prefetch_factor=8,
-                              pin_memory=True)
-    val_loader = DataLoader(val_ds, 
-                            batch_size=batch_size, 
-                            num_workers=num_workers,
-                            prefetch_factor=8,
-                            pin_memory=True)
-    test_loader = DataLoader(test_ds, 
-                             batch_size=batch_size, 
-                             num_workers=num_workers,
-                             prefetch_factor=8,
-                             pin_memory=True)
-    return train_loader, val_loader, test_loader
+    def loader(ds, **kw):
+        if ds is None:
+            return None
+        return DataLoader(ds, batch_size=batch_size, num_workers=num_workers,
+                          prefetch_factor=8, pin_memory=True, **kw)
+
+    train_loader = loader(train_ds, sampler=sampler, shuffle=(sampler is None)) if train_ds else None
+    return train_loader, loader(val_ds), loader(test_ds)
 
 
 if __name__ == "__main__":
