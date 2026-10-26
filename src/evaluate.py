@@ -82,11 +82,7 @@ def plot_confusion(cm, title, out_path):
 
 def load_raw_image(ds, i):
     """Ảnh gốc (đã crop ROI nếu bật) để hiển thị, chưa normalize."""
-    img = Image.open(RAW / ds.paths[i]).convert("RGB")
-    if ds.use_roi:
-        x1, y1, x2, y2 = ds.rois[i]
-        img = img.crop((x1, y1, x2 + 1, y2 + 1))
-    return img
+    return ds.images[i]
 
 
 def load_meta():
